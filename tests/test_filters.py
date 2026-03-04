@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from watershed_seg.filters import epsf
+from watershed_seg.filters import epsf, pgf, vectoral_median
 
 
 def test_epsf_output_shape(tiny_rgb):
@@ -28,3 +28,19 @@ def test_epsf_output_in_range(tiny_rgb):
 def test_epsf_smoothing_reduces_variance(tiny_rgb):
     out = epsf(tiny_rgb, w=5)
     assert out.std() <= tiny_rgb.std()
+
+
+def test_pgf_output_shape(tiny_rgb):
+    out = pgf(tiny_rgb, w=3, tau=30.0)
+    assert out.shape == tiny_rgb.shape
+
+
+def test_pgf_uniform_image_unchanged():
+    img = np.full((10, 10, 3), 100.0)
+    out = pgf(img, w=3, tau=10.0)
+    np.testing.assert_allclose(out, img, atol=1e-10)
+
+
+def test_vectoral_median_output_shape(tiny_rgb):
+    out = vectoral_median(tiny_rgb, w=3)
+    assert out.shape == tiny_rgb.shape
