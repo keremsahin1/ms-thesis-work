@@ -18,5 +18,10 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=7.4", "jupyter>=1.0"]
 
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::pyparsing.exceptions.PyparsingDeprecationWarning",
+]
+
 [tool.setuptools.packages.find]
 include = ["watershed_seg*"]
