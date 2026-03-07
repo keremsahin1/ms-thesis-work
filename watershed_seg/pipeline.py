@@ -103,6 +103,8 @@ class Pipeline:
             ws_labels = rainfalling(gradient)
 
         # Stage 4: Region merging
+        # MATLAB uses the original image for merging (OOLCC.m line 432)
+        # and separates filtered vs original in auto-param calibration.
         rm1_t = self.rm1_threshold
         rm2_t = self.rm2_threshold
 
@@ -110,8 +112,17 @@ class Pipeline:
             from .auto_params import (
                 auto_select_rm1_threshold, auto_select_rm2_threshold
             )
-            rm1_t = auto_select_rm1_threshold(ws_labels, img)
-            rm2_t = auto_select_rm2_threshold(ws_labels, img)
+            # MATLAB auto-param: merge on filtered, evaluate G2 on original
+            rm1_t = auto_select_rm1_threshold(
+                ws_labels, img, filtered_img=filtered
+            )
+            if self.merging in ("rm3", "rm2"):
+                # RM2 threshold must be calibrated on post-RM1 labels
+                # (OOLCC.m line 360: uses dRM1Labels, not dWSLabels)
+                rm1_labels = rm1(ws_labels, img, rm1_t)
+                rm2_t = auto_select_rm2_threshold(
+                    rm1_labels, img, filtered_img=filtered
+                )
 
         if self.merging == "rm3":
             final_labels = rm3(ws_labels, img, rm1_t, rm2_t)

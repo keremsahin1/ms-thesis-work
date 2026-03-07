@@ -8,10 +8,14 @@ fAutomaticSelectH_ImageWindowSize.m.
 Each function sweeps a parameter range, evaluates G2 (normalised
 Moran's I + normalised variance) at each step, and returns the value
 that minimises G2.
+
+Key detail from MATLAB: the merging sweep uses the *filtered* image
+(for computing merging costs), while G2 evaluation uses the *original*
+image (for measuring segmentation quality). See OOLCC.m lines 357-361.
 """
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Iterable, Optional
 
 import numpy as np
 
@@ -24,17 +28,23 @@ from .watershed import vincent_soille
 
 def _sweep(
     labels_fn,
-    original_img: np.ndarray,
+    eval_img: np.ndarray,
     search_range: list,
 ) -> object:
-    """Evaluate G2 for each parameter value; return the minimiser."""
-    original_img = np.asarray(original_img, dtype=np.float64)
+    """Evaluate G2 for each parameter value; return the minimiser.
+
+    Args:
+        labels_fn: Callable(param_value) → label map.
+        eval_img: Image used for G2 evaluation (original, unfiltered).
+        search_range: Parameter values to sweep.
+    """
+    eval_img = np.asarray(eval_img, dtype=np.float64)
     all_mi, all_var = [], []
 
     for val in search_range:
         labels = labels_fn(val)
-        mi = morans_i(labels, original_img)
-        var = intra_variance(labels, original_img)
+        mi = morans_i(labels, eval_img)
+        var = intra_variance(labels, eval_img)
         all_mi.append(mi)
         all_var.append(var)
 
@@ -48,7 +58,8 @@ def _sweep(
 
 def auto_select_rm1_threshold(
     init_labels: np.ndarray,
-    img: np.ndarray,
+    original_img: np.ndarray,
+    filtered_img: Optional[np.ndarray] = None,
     search_range: Iterable[int] = range(1, 101),
 ) -> int:
     """Auto-select RM1 size threshold via G2 sweep.
@@ -57,41 +68,51 @@ def auto_select_rm1_threshold(
 
     Args:
         init_labels: H×W int32 watershed label map.
-        img: H×W×C float64 original image.
+        original_img: H×W×C float64 original image (used for G2 eval).
+        filtered_img: H×W×C float64 filtered image (used for merging costs).
+            If None, falls back to original_img.
         search_range: Range of threshold values to try.
 
     Returns:
         Optimal size threshold (int).
     """
+    merge_img = filtered_img if filtered_img is not None else original_img
     search = list(search_range)
     return _sweep(
-        lambda t: rm1(init_labels, img, size_threshold=t),
-        img,
+        lambda t: rm1(init_labels, merge_img, size_threshold=t),
+        original_img,
         search,
     )
 
 
 def auto_select_rm2_threshold(
     init_labels: np.ndarray,
-    img: np.ndarray,
-    search_range: Iterable[float] = range(100, 10001, 100),
+    original_img: np.ndarray,
+    filtered_img: Optional[np.ndarray] = None,
+    search_range: Iterable[float] = range(50, 5001, 50),
 ) -> float:
     """Auto-select RM2 cost threshold via G2 sweep.
 
     Port of fAutomaticSelectRM2ScaleThreshold.m.
 
+    IMPORTANT: init_labels should be the labels *after* RM1 merging,
+    not the raw watershed labels. See OOLCC.m line 360.
+
     Args:
-        init_labels: H×W int32 label map after RM1.
-        img: H×W×C float64 original image.
-        search_range: Range of cost threshold values to try.
+        init_labels: H×W int32 label map (post-RM1 for RM3 cascade).
+        original_img: H×W×C float64 original image (used for G2 eval).
+        filtered_img: H×W×C float64 filtered image (used for merging costs).
+            If None, falls back to original_img.
+        search_range: Range of cost threshold values to try (MATLAB: 50..5000 step 50).
 
     Returns:
         Optimal cost threshold (float).
     """
+    merge_img = filtered_img if filtered_img is not None else original_img
     search = list(search_range)
     return _sweep(
-        lambda t: rm2(init_labels, img, cost_threshold=float(t)),
-        img,
+        lambda t: rm2(init_labels, merge_img, cost_threshold=float(t)),
+        original_img,
         search,
     )
 
