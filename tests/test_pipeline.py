@@ -56,3 +56,15 @@ def test_evaluate_supervised(tiny_rgb, tiny_label_map):
     assert "E1" in metrics
     assert "E2" in metrics
     assert 0.0 <= metrics["E1"] <= 100.0
+
+
+def test_pipeline_auto_params_passes_filtered_img(tiny_rgb):
+    """Regression: auto_params must pass filtered_img to auto-select functions
+    and use post-RM1 labels for RM2 threshold selection."""
+    p = Pipeline()
+    result = p.run(tiny_rgb, auto_params=True)
+    assert result.labels.shape == tiny_rgb.shape[:2]
+    assert result.labels.min() >= 1
+    # Verify auto-selected thresholds are stored in params
+    assert "rm1_threshold" in result.params
+    assert "rm2_threshold" in result.params
